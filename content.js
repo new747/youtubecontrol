@@ -23,7 +23,7 @@ const youtubecontrol = {
 	},
 	interval: () => {
 //		console.log('interval called');
-		const img = document.getElementById('img');
+		const img = Array.from(document.querySelectorAll('img#img')).filter(e => e.alt == 'アバターの画像')[0];
 		if (img.src == youtubecontrol.imgSrcIgnore) {
 			return;
 		}
