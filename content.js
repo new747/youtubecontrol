@@ -23,8 +23,8 @@ const youtubecontrol = {
 	},
 	interval: () => {
 //		console.log('interval called');
-		const imgSrc = document.getElementById('img').src;
-		if (imgSrc == youtubecontrol.imgSrcIgnore) {
+		const img = document.getElementById('img');
+		if (img.src == youtubecontrol.imgSrcIgnore) {
 			return;
 		}
 		
@@ -43,26 +43,40 @@ const youtubecontrol = {
 			youtubecontrol.fetchJsonData();
 		}
 
+		let imgTooltip = '';
 		const forceControl = youtubecontrol.jsonData.forceControl[0];
 		// force denied?
-		let timeTo = youtubecontrol.getContainsTimeTo(forceControl.deniedFrom, forceControl.durationHours, now);
-		if (timeTo) {
-			youtubecontrol.deny(timeTo + ' までは禁止時間です');
-			return;
+		const deniedTimeTo = youtubecontrol.getContainsTimeTo(forceControl.deniedFrom, forceControl.durationHours, now);
+		if (deniedTimeTo) {
+			youtubecontrol.deny(deniedTimeTo + ' までは禁止時間です');
+			imgTooltip = deniedTimeTo + ' までは禁止';
 		}
 
 		// force allowed?
-		if (youtubecontrol.getContainsTimeTo(forceControl.allowedFrom, forceControl.durationHours, now)) {
-			return;
+		const allowedTimeTo = youtubecontrol.getContainsTimeTo(forceControl.allowedFrom, forceControl.durationHours, now);
+		if (allowedTimeTo) {
+			imgTooltip = allowedTimeTo + ' まで許可';
 		}
 
 		// schedule denied?
+		let dayOfWeek = now.getDay();
+		try {
+			if (now.getTime() - new Date(forceControl.dateToBeTreatAsHoliday).getTime() < 24 * 60 * 60 * 1000) {
+				dayOfWeek = 0;
+			}
+		} catch {
+			// ignore
+		}
 		const hhmm = ('00' + now.getHours()).slice(-2) + ':' + ('00' + now.getMinutes()).slice(-2);
-		const schedules = youtubecontrol.imgSrcSchedule == imgSrc ? youtubecontrol.jsonData.schedule : youtubecontrol.jsonData.schedule2;
-		const deniedSchedule = schedules.find(elem => elem.day == now.getDay() && elem.from <= hhmm && hhmm <= elem.to);
-		if (deniedSchedule) {
+		const schedules = youtubecontrol.imgSrcSchedule == img.src ? youtubecontrol.jsonData.schedule : youtubecontrol.jsonData.schedule2;
+		const deniedSchedule = schedules.find(elem => elem.day == dayOfWeek && elem.from <= hhmm && hhmm <= elem.to);
+		if (!deniedTimeTo && !allowedTimeTo && deniedSchedule) {
 			youtubecontrol.deny(deniedSchedule.from + ' から ' + deniedSchedule.to + ' までは禁止時間です');
 		}
+
+		imgTooltip = (!imgTooltip ? '' : '\n') + '---- 今日の禁止時間残 ----';
+		schedules.filter(elem => elem.day == dayOfWeek && elem.to >= hhmm ).forEach(elem => imgTooltip = imgTooltip + '\n' + elem.from + '～' + elem.to);
+		img.title = imgTooltip;
 	}
 };
 
