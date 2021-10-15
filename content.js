@@ -11,7 +11,7 @@ const youtubecontrol = {
 	},
 	fetchJsonData: () => {
 		console.log('fetchJsonData called -> ' + youtubecontrol.dataUrl);
-		fetch(youtubecontrol.dataUrl)
+		fetch(youtubecontrol.dataUrl, {cache: 'no-cache'})
 			.then(res => res.json()) // フェッチしたデータを JSON 形式に変換
 			.then(jsonData => {youtubecontrol.jsonData = jsonData}); // JSONを保持
 	},
