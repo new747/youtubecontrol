@@ -9,6 +9,40 @@ const youtubecontrol = {
 		const dtTo = new Date(dtFrom.getTime() + (durationHours * 60 * 60 * 1000));
 		return dtFrom <= now && now <= dtTo ? dtTo : null;
 	},
+	getSchedules: (personalKey) => {
+		return youtubecontrol.jsonData['schedule' + personalKey];
+	},
+	getForcedTimeTo: (operation, personalKey, now) => {
+		const operationProp = operation + 'From';
+		const prop = 'forceControl';
+
+		let lastOperatedTimeTo = undefined;
+		[prop, prop + personalKey].forEach(jsonProp => {
+			const forceControl = youtubecontrol.jsonData[jsonProp][0];
+			const timeTo = youtubecontrol.getContainsTimeTo(forceControl[operationProp], forceControl.durationHours, now);
+			if (timeTo) {
+				if (lastOperatedTimeTo == undefined || timeTo > lastOperatedTimeTo) {
+					lastOperatedTimeTo = timeTo;
+				}
+			}
+		});
+		return lastOperatedTimeTo;
+	},
+	getForcedProp: (forcedProp, personalKey) => {
+		const prop = 'forceControl';
+
+		let propVal = undefined;
+		[prop, prop + personalKey].forEach(jsonProp => {
+			const forceControl = youtubecontrol.jsonData[jsonProp][0];
+			const val = forceControl[forcedProp];
+			if (val) {
+				if (propVal == undefined || val > propVal) {
+					propVal = val;
+				}
+			}
+		});
+		return propVal;
+	},
 	fetchJsonData: () => {
 		console.log('fetchJsonData called -> ' + youtubecontrol.dataUrl);
 		fetch(youtubecontrol.dataUrl, {cache: 'no-cache'})
@@ -49,9 +83,7 @@ const youtubecontrol = {
 	interval: () => {
 //		console.log('interval called');
 		const img = youtubecontrol.getAvatarImg();
-		if (img.src == youtubecontrol.imgSrcIgnore) {
-			return;
-		}
+		const personalKey = youtubecontrol.imgSrcSchedule == img.src ? 'Ha' : 'Yu';
 		
 		if (youtubecontrol.goSubscriptions && !youtubecontrol.isPaused()) {
 			window.location.href = 'https://www.youtube.com/feed/subscriptions';
@@ -72,17 +104,16 @@ const youtubecontrol = {
 		}
 
 		let imgTooltip = '';
-		const forceControl = youtubecontrol.jsonData.forceControl[0];
 		// force denied?
-		const deniedTimeTo = youtubecontrol.getContainsTimeTo(forceControl.deniedFrom, forceControl.durationHours, now);
+		const deniedTimeTo = youtubecontrol.getForcedTimeTo('denied', personalKey, now);
 		if (deniedTimeTo) {
 			youtubecontrol.deny(deniedTimeTo + ' までは禁止時間です');
 			imgTooltip = deniedTimeTo + ' までは禁止';
 		}
 
 		// force allowed?
-		const allowedTimeTo = youtubecontrol.getContainsTimeTo(forceControl.allowedFrom, forceControl.durationHours, now);
-		if (allowedTimeTo) {
+		const allowedTimeTo = youtubecontrol.getForcedTimeTo('allowed', personalKey, now);
+		if (allowedTimeTo && !deniedTimeTo) {
 			imgTooltip = allowedTimeTo + ' まで許可';
 			youtubecontrol.goSubscriptions = false;
 		}
@@ -90,22 +121,23 @@ const youtubecontrol = {
 		// schedule denied?
 		let dayOfWeek = now.getDay();
 		try {
-			if (now.getTime() - new Date(forceControl.dateToBeTreatAsHoliday).getTime() < 24 * 60 * 60 * 1000) {
+			if (now.getTime() - new Date(youtubecontrol.getForcedProp('dateToBeTreatAsHoliday', personalKey)).getTime() < 24 * 60 * 60 * 1000) {
 				dayOfWeek = 0;
 			}
 		} catch {
 			// ignore
 		}
 		const hhmm = youtubecontrol.toHhmm(now);
-		const schedules = youtubecontrol.imgSrcSchedule == img.src ? youtubecontrol.jsonData.schedule : youtubecontrol.jsonData.schedule2;
+		const schedules = youtubecontrol.getSchedules(personalKey);
 		const deniedSchedule = schedules.find(elem => elem.day == dayOfWeek && youtubecontrol.toHhmm(elem.from) <= hhmm && hhmm <= youtubecontrol.toHhmm(elem.to));
 		if (!deniedTimeTo && !allowedTimeTo && deniedSchedule) {
 			youtubecontrol.deny(youtubecontrol.toHhmm(deniedSchedule.from) + ' から ' + youtubecontrol.toHhmm(deniedSchedule.to) + ' までは禁止時間です');
-		} else {
+		} 
+		if (!deniedTimeTo && !deniedSchedule) {
 			youtubecontrol.goSubscriptions = false;
 		}
 
-		imgTooltip = (!imgTooltip ? '' : '\n') + '---- 今日の禁止時間残 ----';
+		imgTooltip += (!imgTooltip ? '' : '\n') + '---- 今日の禁止時間残 ----';
 		schedules.filter(elem => elem.day == dayOfWeek && youtubecontrol.toHhmm(elem.to) >= hhmm)
 			.forEach(elem => imgTooltip = imgTooltip + '\n' + youtubecontrol.toHhmm(elem.from) + '～' + youtubecontrol.toHhmm(elem.to));
 		img.title = imgTooltip;
@@ -114,14 +146,13 @@ const youtubecontrol = {
 
 window.onload = function() {
 	youtubecontrol.fetchJsonData();
+	if (youtubecontrol.getAvatarImg().src == youtubecontrol.imgSrcIgnore) {
+		return;
+	}
 
 	const intervalId = setInterval(youtubecontrol.interval, 3 * 1000)	// 3秒周期
 
 	const intervalId2 = setInterval(function() {
-		if (youtubecontrol.getAvatarImg().src == youtubecontrol.imgSrcIgnore) {
-			return;
-		}
-
 		document.querySelectorAll('div#secondary').forEach(elem => {elem.hidden = true});
 		const subscribeButtons = document.querySelectorAll('ytd-subscribe-button-renderer > tp-yt-paper-button');
 		subscribeButtons.forEach(btn => {
